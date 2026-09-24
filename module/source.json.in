@@ -1,0 +1,8 @@
+{
+    "url": "https://github.com/libsdl-org/SDL/releases/download/release-%{upstream_version}/SDL3-%{upstream_version}.tar.gz",
+    "integrity": "",
+    "strip_prefix": "SDL3-%{upstream_version}",
+    "overlay": {},
+    "patch_strip": 1,
+    "patches": {}
+}

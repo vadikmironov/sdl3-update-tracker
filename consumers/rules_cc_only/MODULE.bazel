@@ -1,0 +1,9 @@
+# A consumer that knows nothing about apple_support: on macOS, the C++
+# toolchain of rules_cc compiles the Objective-C sources of the module.
+module(
+    name = "sdl3_consumer_rules_cc_only",
+    version = "0.0.0",
+)
+
+bazel_dep(name = "rules_cc", version = "0.2.16")
+bazel_dep(name = "sdl3", version = "%{module_version}")

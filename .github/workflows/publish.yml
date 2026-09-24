@@ -1,0 +1,144 @@
+name: Publish to BCR
+
+# After a green CI run on main: if BCR does not have the version of
+# upstream.json, stage it, push a branch to the fork, and open an issue here
+# with a link that opens the BCR pull request. A person opens the pull request,
+# because BCR counts a version bump as approved only when its author is a
+# maintainer of the module, and the CLA check reads the author.
+#
+# The job asks what BCR holds, not what changed in a commit. A second run for
+# the same version does nothing, and a run by hand is always safe.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Stage and validate, but push no branch and open no issue"
+        type: boolean
+        default: true
+      version:
+        description: "Upstream version to stage; default: upstream.json. For a test of the step"
+        required: false
+        type: string
+      bcr_revision:
+        description: "N of a BCR-only revision .bcr.N; default: upstream.json"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+env:
+  BCR: bazelbuild/bazel-central-registry
+
+jobs:
+  publish:
+    name: Publish
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # The token for the fork is a secret of this environment, and only main can use it.
+    environment: bcr-publish
+    permissions:
+      contents: read
+      issues: write
+      # To list the jobs of the gate run in the issue.
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: What does BCR have?
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORK: ${{ vars.BCR_FORK }}
+          VERSION: ${{ inputs.version }}
+          REVISION: ${{ inputs.bcr_revision }}
+        run: |
+          module="$(python3 -c 'import json; print(json.load(open("upstream.json"))["module"])')"
+          tools/common/render.py ${VERSION:+--version "$VERSION"} ${REVISION:+--bcr-revision "$REVISION"} --out "$RUNNER_TEMP/rendered" >/dev/null
+          version="$(cd "$RUNNER_TEMP/rendered/registry/modules/$module" && ls -d */ | tr -d /)"
+          branch="$module-$version"
+          echo "module=$module" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          if gh api "repos/$BCR/contents/modules/$module/$version/source.json" >/dev/null 2>&1; then
+            echo "BCR already has $module@$version. There is nothing to publish." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          elif gh api "repos/$FORK/branches/$branch" >/dev/null 2>&1; then
+            echo "The branch $branch is already in $FORK. The pull request waits for a person." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+        if: steps.state.outputs.needed == 'true'
+        with:
+          bazelisk-cache: true
+
+      - name: Stage the version into a BCR checkout and let BCR's tools examine it
+        if: steps.state.outputs.needed == 'true'
+        env:
+          VERSION: ${{ inputs.version }}
+          REVISION: ${{ inputs.bcr_revision }}
+        run: |
+          # Full history without blobs: a push from a shallow clone can be refused.
+          git clone -q --filter=blob:none "https://github.com/$BCR" "$RUNNER_TEMP/bcr"
+          tools/common/stage_into_bcr.sh "$RUNNER_TEMP/bcr" ${VERSION:+--version "$VERSION"} ${REVISION:+--bcr-revision "$REVISION"} | tee "$RUNNER_TEMP/stage.txt"
+
+      - name: Commit, and push the branch to the fork
+        if: steps.state.outputs.needed == 'true'
+        env:
+          FORK: ${{ vars.BCR_FORK }}
+          FORK_TOKEN: ${{ secrets.BCR_FORK_TOKEN }}
+          AUTHOR_NAME: ${{ vars.BCR_AUTHOR_NAME }}
+          AUTHOR_EMAIL: ${{ vars.BCR_AUTHOR_EMAIL }}
+          TITLE: ${{ steps.state.outputs.module }}@${{ steps.state.outputs.version }}
+          BRANCH: ${{ steps.state.outputs.branch }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          cd "$RUNNER_TEMP/bcr"
+          git checkout -q -b "$BRANCH"
+          git add -A modules
+          # The author is the maintainer: the CLA check of BCR reads the author.
+          git -c user.name="$AUTHOR_NAME" -c user.email="$AUTHOR_EMAIL" commit -q -m "$TITLE"
+          git --no-pager show --stat --format='%an: %s' HEAD
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "Dry run: no push." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            git push -q "https://x-access-token:${FORK_TOKEN}@github.com/${FORK}.git" "$BRANCH"
+            echo "Pushed $BRANCH to $FORK." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Open the issue that asks for the pull request
+        if: steps.state.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORK: ${{ vars.BCR_FORK }}
+          MODULE: ${{ steps.state.outputs.module }}
+          VERSION: ${{ steps.state.outputs.version }}
+          BRANCH: ${{ steps.state.outputs.branch }}
+          OWNER: ${{ github.repository_owner }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+          STAGE_REPORT: ${{ runner.temp }}/stage.txt
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          tools/common/publish_issue.py > "$RUNNER_TEMP/issue.md"
+          cat "$RUNNER_TEMP/issue.md" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "Dry run: no issue."
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --assignee "$OWNER" \
+              --title "Publish $MODULE@$VERSION to BCR" --body-file "$RUNNER_TEMP/issue.md"
+          fi

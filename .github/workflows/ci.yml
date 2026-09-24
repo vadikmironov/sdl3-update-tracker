@@ -1,0 +1,403 @@
+name: CI
+
+# The gate. One job renders the module, and each other job tests those same
+# bytes. A version bump must pass here before it goes to BCR.
+
+on:
+  pull_request:
+  push:
+    # dev/** lets a person try a change of the CI with no pull request.
+    branches: [main, "dev/**"]
+  schedule:
+    # Each Monday. Dependencies change when the module does not.
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Upstream version to render; default: upstream.json"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: Render and canary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      module: ${{ steps.render.outputs.module }}
+      module_version: ${{ steps.render.outputs.module_version }}
+      upstream_version: ${{ steps.render.outputs.upstream_version }}
+      permalinks: ${{ steps.render.outputs.permalinks }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Render the module
+        id: render
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          # Exit code 3: the render is complete, but a permalink needs a person.
+          # The other jobs still test the module; the Permalinks job reports it.
+          code=0
+          tools/common/render.py ${VERSION:+--version "$VERSION"} 2>&1 | tee render.log || code=${PIPESTATUS[0]}
+          if [[ $code == 3 ]]; then echo "permalinks=needs-a-person" >> "$GITHUB_OUTPUT"; elif [[ $code != 0 ]]; then exit "$code"; fi
+          { echo '```'; grep -E "permalink" render.log || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          module="$(python3 -c 'import json; print(json.load(open("upstream.json"))["module"])')"
+          echo "module=$module" >> "$GITHUB_OUTPUT"
+          echo "module_version=$(ls "rendered/registry/modules/$module" | grep -v -e metadata.json -e README.md)" >> "$GITHUB_OUTPUT"
+          echo "upstream_version=${VERSION:-$(python3 -c 'import json; print(json.load(open("upstream.json"))["version"])')}" >> "$GITHUB_OUTPUT"
+      - name: "Canary: each check of the gate still fails on a bad input"
+        run: tools/common/canary.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rendered
+          path: rendered/
+          # An overlay can contain a dotfile, for example .bazelignore.
+          include-hidden-files: true
+          if-no-files-found: error
+
+  test:
+    name: ${{ matrix.platform.name }}, Bazel ${{ matrix.bazel }}
+    needs: render
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        bazel: ["7.x", "8.x", "9.x"]
+        platform:
+          - { name: "Ubuntu 24.04 x64", runner: ubuntu-24.04 }
+          - { name: "Ubuntu 24.04 arm64", runner: ubuntu-24.04-arm }
+          - { name: "Ubuntu 22.04 x64", runner: ubuntu-22.04 }
+          - { name: "macOS arm64", runner: macos-latest }
+          - { name: "macOS x64", runner: macos-15-intel }
+          - { name: "Windows x64", runner: windows-2022 }
+          - { name: "Windows arm64", runner: windows-11-arm }
+          - { name: "Windows arm64, VS 2026", runner: windows-11-vs2026-arm }
+        include:
+          # The floor of bazel_compatibility in MODULE.bazel.
+          - { bazel: "7.4.0", platform: { name: "Ubuntu 24.04 x64", runner: ubuntu-24.04 } }
+    env:
+      USE_BAZEL_VERSION: ${{ matrix.bazel }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rendered
+          path: rendered
+      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+        with:
+          bazelisk-cache: true
+      - name: Build and test through the rendered registry
+        shell: bash
+        working-directory: rendered/consumers/default
+        # A server that stops to answer must not use the 45 minutes of the job.
+        # A step that is too long fails, and rerun.yml starts a failed job again;
+        # a job that is too long is cancelled, and nothing starts it again.
+        timeout-minutes: 25
+        run: |
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            registry="file:///$(cd ../../registry && pwd -W)"
+          else
+            registry="file://$(cd ../../registry && pwd)"
+          fi
+          flags=(--registry="$registry" --registry=https://bcr.bazel.build)
+          # Bazel gets its dependencies in the loading and analysis phases. Try
+          # them up to three times before the tests, for two reasons:
+          #  * a download can fail for a moment;
+          #  * on Windows arm64 the server of Bazel 8 stopped, or did not answer,
+          #    at the start of the loading phase, and it did so again with the
+          #    same directories. So each attempt on Windows gets new directories,
+          #    a short path to stay under the Windows limit, and a time limit.
+          for attempt in 1 2 3; do
+            startup=""; limit=""
+            if [[ "$RUNNER_OS" == Windows ]]; then
+              startup="--output_user_root=C:/u$attempt --output_base=C:/b$attempt"
+              limit="timeout 600"
+            fi
+            [[ $attempt == 1 ]] && bazel $startup version
+            if $limit bazel $startup build --nobuild "${flags[@]}" "@${{ needs.render.outputs.module }}//..."; then break; fi
+            echo "::warning::Attempt $attempt of the loading and analysis phases failed."
+            [[ $attempt == 3 ]] && exit 1
+            if [[ "$RUNNER_OS" == Windows ]]; then taskkill //F //IM java.exe >/dev/null 2>&1 || true; fi
+            sleep $((attempt * 20))
+          done
+          bazel $startup test --verbose_failures --test_output=errors "${flags[@]}" \
+            "@${{ needs.render.outputs.module }}//..."
+
+      # What BCR presubmit runs as bcr_test_module: a separate module that links
+      # @sdl3 as a consumer does. BCR points it at the extracted source with
+      # local_path_override; here the module comes from the rendered registry
+      # instead, so that override goes.
+      - name: Build and test the test module
+        shell: bash
+        working-directory: rendered/registry
+        timeout-minutes: 15
+        run: |
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            registry="file:///$(pwd -W)"
+            startup="--output_user_root=C:/u1 --output_base=C:/t"
+          else
+            registry="file://$(pwd)"
+            startup=""
+          fi
+          scratch="$(mktemp -d)"
+          cp -R "modules/${{ needs.render.outputs.module }}/${{ needs.render.outputs.module_version }}/overlay/test_module/." "$scratch"
+          sed -i.bak '/^local_path_override(/,/^)/d' "$scratch/MODULE.bazel" && rm "$scratch/MODULE.bazel.bak"
+          cd "$scratch"
+          bazel $startup test --verbose_failures --test_output=errors \
+            --registry="$registry" --registry=https://bcr.bazel.build //...
+
+      # "Server terminated abruptly" in the log of the client says nothing about
+      # the cause. The cause is in these files, and the runner is deleted after
+      # the job, so keep them.
+      - name: The log of the Bazel server, if the server stopped
+        if: failure() && runner.os == 'Windows'
+        shell: bash
+        run: |
+          for b in C:/b1 C:/b2 C:/b3 C:/t; do
+            [[ -d $b ]] || continue
+            echo "=== $b"; tail -n 60 $b/server/jvm.out 2>/dev/null || echo "no jvm.out"
+            ls -la $b/server $b/*.log $b/hs_err* 2>/dev/null || true
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure() && runner.os == 'Windows'
+        with:
+          name: bazel-server-logs-${{ matrix.platform.runner }}-bazel-${{ matrix.bazel }}
+          path: |
+            C:/b?/server/jvm.out
+            C:/b?/server/hs_err*.log
+            C:/b?/hs_err*.log
+            C:/b?/java.log*
+            C:/t/server/jvm.out
+            C:/t/server/hs_err*.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+  consumers:
+    # On macOS, the module compiles Objective-C. These consumers make sure that
+    # it does so with each C++ toolchain a consumer can have.
+    name: macOS arm64, consumer ${{ matrix.consumer.name }}
+    needs: render
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        consumer:
+          - { name: "with rules_cc only", dir: rules_cc_only }
+          - { name: "on toolchains_llvm", dir: toolchains_llvm }
+    env:
+      USE_BAZEL_VERSION: "9.x"
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rendered
+          path: rendered
+      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+        with:
+          bazelisk-cache: true
+      - name: Build and test through the rendered registry
+        working-directory: rendered/consumers/${{ matrix.consumer.dir }}
+        timeout-minutes: 25
+        run: |
+          registry="file://$(cd ../../registry && pwd)"
+          flags=(--registry="$registry" --registry=https://bcr.bazel.build)
+          bazel version
+          # A download can fail for a moment. See the platform jobs.
+          for attempt in 1 2 3; do
+            bazel build --nobuild "${flags[@]}" "@${{ needs.render.outputs.module }}//..." && break
+            [[ $attempt == 3 ]] && exit 1
+            sleep $((attempt * 20))
+          done
+          bazel test --verbose_failures --test_output=errors "${flags[@]}" \
+            "@${{ needs.render.outputs.module }}//..."
+
+  test-ubuntu2004:
+    # The oldest image of the BCR presubmit, with a toolchain of the GCC 9 era.
+    # GitHub has no such runner, so the job runs in a container.
+    name: Ubuntu 20.04 x64, Bazel ${{ matrix.bazel }}
+    needs: render
+    runs-on: ubuntu-24.04
+    container: ubuntu:20.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        bazel: ["7.x", "8.x", "9.x"]
+    env:
+      USE_BAZEL_VERSION: ${{ matrix.bazel }}
+    steps:
+      - name: Install a toolchain and bazelisk
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential ca-certificates curl git python3 unzip zip
+          curl -fsSL -o /usr/local/bin/bazel \
+            "https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64"
+          chmod +x /usr/local/bin/bazel
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rendered
+          path: rendered
+      - name: Build and test through the rendered registry
+        shell: bash
+        working-directory: rendered/consumers/default
+        run: |
+          registry="file://$(cd ../../registry && pwd)"
+          bazel version
+          flags=(--registry="$registry" --registry=https://bcr.bazel.build)
+          # A download can fail for a moment, and one such failure in one of many
+          # jobs would make the gate red. Bazel gets its dependencies in the
+          # loading and analysis phases, so try those again before the tests.
+          for attempt in 1 2 3; do
+            bazel build --nobuild "${flags[@]}" "@${{ needs.render.outputs.module }}//..." && break
+            [[ $attempt == 3 ]] && exit 1
+            sleep $((attempt * 20))
+          done
+          bazel test --verbose_failures --test_output=errors "${flags[@]}" \
+            "@${{ needs.render.outputs.module }}//..."
+
+  oracle:
+    # On Linux the module generates its build config from checks that copy
+    # SDL's own CMake checks. The generated header must agree with what SDL's
+    # configure produces on the oldest and the newest Ubuntu of the BCR
+    # presubmit. The oracle is made here, at the rendered version, so a bump
+    # fails only when upstream added or changed a check. See tools/module/.
+    name: CMake oracle, ${{ matrix.image.name }}
+    needs: render
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image.tag }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: "Ubuntu 20.04", tag: "ubuntu:20.04", id: ubuntu2004 }
+          - { name: "Ubuntu 24.04", tag: "ubuntu:24.04", id: ubuntu2404 }
+    steps:
+      - name: Install a toolchain and bazelisk
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential ca-certificates curl git python3 unzip zip
+          curl -fsSL -o /usr/local/bin/bazel \
+            "https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64"
+          chmod +x /usr/local/bin/bazel
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rendered
+          path: rendered
+      # The module first, on the bare image, as the test jobs see it: the
+      # packages that the oracle needs must not change what the checks find.
+      - name: Generate the build config of the module
+        id: generated
+        shell: bash
+        working-directory: rendered/consumers/default
+        run: |
+          registry="file://$(cd ../../registry && pwd)"
+          flags=(--registry="$registry" --registry=https://bcr.bazel.build)
+          bazel version
+          for attempt in 1 2 3; do
+            bazel build --nobuild "${flags[@]}" "@${{ needs.render.outputs.module }}//:config_h" && break
+            [[ $attempt == 3 ]] && exit 1
+            sleep $((attempt * 20))
+          done
+          bazel build "${flags[@]}" "@${{ needs.render.outputs.module }}//:config_h"
+          generated="$(bazel cquery "${flags[@]}" --output=files "@${{ needs.render.outputs.module }}//:config_h" 2>/dev/null)"
+          cp "$generated" "$GITHUB_WORKSPACE/generated.h"
+      - name: Generate the oracle with SDL's own CMake configure
+        shell: bash
+        run: |
+          tools/module/gen_linux_build_config.sh --inside \
+            "${{ needs.render.outputs.upstream_version }}" "${{ matrix.image.tag }}" > oracle.h
+      - name: The two define sets are identical
+        shell: bash
+        run: tools/module/diff_config.sh generated.h oracle.h
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: build-config-${{ matrix.image.id }}
+          path: |
+            generated.h
+            oracle.h
+          if-no-files-found: ignore
+
+  permalinks:
+    # The renderer moves the line numbers of a link when upstream only moved the
+    # lines. It cannot do that when the text itself changed.
+    name: Permalinks
+    needs: render
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: No permalink needs a person
+        env:
+          STATE: ${{ needs.render.outputs.permalinks }}
+        run: |
+          if [[ "$STATE" == "needs-a-person" ]]; then
+            echo "::error::The text under a permalink changed upstream. See the summary of the Render job. Correct the link in module/, then run tools/common/check_permalinks.py --fix."
+            exit 1
+          fi
+
+  gate:
+    # The one required check. It fails if a job before it did not pass.
+    name: Gate
+    if: always()
+    needs: [render, test, consumers, test-ubuntu2004, oracle, permalinks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: All jobs passed
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "$RESULTS"
+          python3 -c 'import json, os, sys; sys.exit(0 if set(json.loads(os.environ["RESULTS"])) == {"success"} else 1)'
+
+  rendered-branch:
+    # A literal copy of the module, as BCR holds it, with links that operate.
+    # It is a mirror only: a push with the built-in token starts no workflow.
+    name: Update the rendered branch
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [render, gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rendered
+          path: ${{ runner.temp }}/rendered
+      - name: Commit the render
+        env:
+          VERSION: ${{ needs.render.outputs.module }}@${{ needs.render.outputs.module_version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code origin rendered >/dev/null; then
+            git checkout rendered
+          else
+            git checkout --orphan rendered
+          fi
+          # -f: on a new orphan branch, git sees each file as staged.
+          git rm -rqf --ignore-unmatch .
+          git clean -fdxq
+          cp -R "$RUNNER_TEMP/rendered/registry/modules" modules
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The render did not change."
+          else
+            git commit -q -m "$VERSION, rendered from ${GITHUB_SHA::7}"
+            git push origin rendered
+          fi

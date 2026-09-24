@@ -1,0 +1,37 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": ["config:recommended"],
+    "enabledManagers": ["custom.regex"],
+    "minimumReleaseAge": "3 days",
+    "statusCheckNames": {
+        "minimumReleaseAge": null
+    },
+    "automergeStrategy": "squash",
+    "customManagers": [
+        {
+            "customType": "regex",
+            "description": "The upstream release that this repository tracks. SDL tags a release as release-3.x.y; a preview tag and an SDL 2 tag do not match",
+            "managerFilePatterns": ["/^upstream\\.json$/"],
+            "matchStrings": ["\"version\":\\s*\"(?<currentValue>[^\"]+)\""],
+            "depNameTemplate": "libsdl-org/SDL",
+            "datasourceTemplate": "github-releases",
+            "extractVersionTemplate": "^release-(?<version>3\\.\\d+\\.\\d+)$"
+        }
+    ],
+    "packageRules": [
+        {
+            "description": "A patch release that passes the gate merges with no person",
+            "matchDepNames": ["libsdl-org/SDL"],
+            "matchUpdateTypes": ["patch"],
+            "automerge": true,
+            "platformAutomerge": true
+        },
+        {
+            "description": "A minor or a major release is porting work",
+            "matchDepNames": ["libsdl-org/SDL"],
+            "matchUpdateTypes": ["minor", "major"],
+            "automerge": false,
+            "labels": ["manual-bump"]
+        }
+    ]
+}

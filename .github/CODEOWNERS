@@ -1,0 +1,6 @@
+# The rule for main demands a review from a code owner. Each path has an owner
+# apart from upstream.json, the one file that Renovate changes. A version bump
+# can thus merge with no person, and a change to a script, the module or a
+# workflow cannot.
+*               @vadikmironov
+/upstream.json

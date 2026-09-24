@@ -1,0 +1,8 @@
+# Renovate has no permission to change workflow files, on purpose. Dependabot
+# updates the actions, and it needs no secret.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

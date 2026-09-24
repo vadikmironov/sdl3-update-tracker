@@ -1,0 +1,7 @@
+{
+    "module": "sdl3",
+    "version": "3.4.16",
+    "bcr_revision": 0,
+    "permalinks_verified_for": "3.4.16",
+    "release_notes": "https://github.com/libsdl-org/SDL/releases/tag/release-%{upstream_version}"
+}
