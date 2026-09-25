@@ -137,21 +137,36 @@ jobs:
       - name: Build and test the test module
         shell: bash
         working-directory: rendered/registry
-        timeout-minutes: 15
+        timeout-minutes: 25
         run: |
           if [[ "$RUNNER_OS" == Windows ]]; then
             registry="file:///$(pwd -W)"
-            startup="--output_user_root=C:/u1 --output_base=C:/t"
+            # The server of the step before is idle now. On Windows arm64 the
+            # server of Bazel 8 stopped or did not answer in 4 of 4 starts next
+            # to it, so it goes first.
+            taskkill //F //IM java.exe >/dev/null 2>&1 || true
           else
             registry="file://$(pwd)"
-            startup=""
           fi
+          flags=(--registry="$registry" --registry=https://bcr.bazel.build)
           scratch="$(mktemp -d)"
           cp -R "modules/${{ needs.render.outputs.module }}/${{ needs.render.outputs.module_version }}/overlay/test_module/." "$scratch"
           sed -i.bak '/^local_path_override(/,/^)/d' "$scratch/MODULE.bazel" && rm "$scratch/MODULE.bazel.bak"
           cd "$scratch"
-          bazel $startup test --verbose_failures --test_output=errors \
-            --registry="$registry" --registry=https://bcr.bazel.build //...
+          # The same three attempts as the step before, in directories of their own.
+          for attempt in 1 2 3; do
+            startup=""; limit=""
+            if [[ "$RUNNER_OS" == Windows ]]; then
+              startup="--output_user_root=C:/u$attempt --output_base=C:/t$attempt"
+              limit="timeout 600"
+            fi
+            if $limit bazel $startup build --nobuild "${flags[@]}" //...; then break; fi
+            echo "::warning::Attempt $attempt of the loading and analysis phases of the test module failed."
+            [[ $attempt == 3 ]] && exit 1
+            if [[ "$RUNNER_OS" == Windows ]]; then taskkill //F //IM java.exe >/dev/null 2>&1 || true; fi
+            sleep $((attempt * 20))
+          done
+          bazel $startup test --verbose_failures --test_output=errors "${flags[@]}" //...
 
       # "Server terminated abruptly" in the log of the client says nothing about
       # the cause. The cause is in these files, and the runner is deleted after
@@ -160,7 +175,7 @@ jobs:
         if: failure() && runner.os == 'Windows'
         shell: bash
         run: |
-          for b in C:/b1 C:/b2 C:/b3 C:/t; do
+          for b in C:/b1 C:/b2 C:/b3 C:/t1 C:/t2 C:/t3; do
             [[ -d $b ]] || continue
             echo "=== $b"; tail -n 60 $b/server/jvm.out 2>/dev/null || echo "no jvm.out"
             ls -la $b/server $b/*.log $b/hs_err* 2>/dev/null || true
@@ -170,12 +185,10 @@ jobs:
         with:
           name: bazel-server-logs-${{ matrix.platform.runner }}-bazel-${{ matrix.bazel }}
           path: |
-            C:/b?/server/jvm.out
-            C:/b?/server/hs_err*.log
-            C:/b?/hs_err*.log
-            C:/b?/java.log*
-            C:/t/server/jvm.out
-            C:/t/server/hs_err*.log
+            C:/[bt]?/server/jvm.out
+            C:/[bt]?/server/hs_err*.log
+            C:/[bt]?/hs_err*.log
+            C:/[bt]?/java.log*
           if-no-files-found: ignore
           retention-days: 30
 
