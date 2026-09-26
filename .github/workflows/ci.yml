@@ -93,6 +93,16 @@ jobs:
       - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
         with:
           bazelisk-cache: true
+      # Bazel 8.8 bundles JDK 25+36. On Windows arm64 its server stopped or hung
+      # in 43 of 48 starts, and in 0 of 48 on the latest Zulu 25. Bazel 7 and 9
+      # bundle a different JDK.
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        id: jdk
+        if: runner.os == 'Windows' && runner.arch == 'ARM64' && startsWith(matrix.bazel, '8.')
+        with:
+          distribution: zulu
+          java-version: "25"
+          architecture: aarch64
       - name: Build and test through the rendered registry
         shell: bash
         working-directory: rendered/consumers/default
@@ -100,6 +110,8 @@ jobs:
         # A step that is too long fails, and rerun.yml starts a failed job again;
         # a job that is too long is cancelled, and nothing starts it again.
         timeout-minutes: 25
+        env:
+          SERVER_JDK: ${{ steps.jdk.outputs.path }}
         run: |
           if [[ "$RUNNER_OS" == Windows ]]; then
             registry="file:///$(cd ../../registry && pwd -W)"
@@ -107,17 +119,15 @@ jobs:
             registry="file://$(cd ../../registry && pwd)"
           fi
           flags=(--registry="$registry" --registry=https://bcr.bazel.build)
-          # Bazel gets its dependencies in the loading and analysis phases. Try
-          # them up to three times before the tests, for two reasons:
-          #  * a download can fail for a moment;
-          #  * on Windows arm64 the server of Bazel 8 stopped, or did not answer,
-          #    at the start of the loading phase, and it did so again with the
-          #    same directories. So each attempt on Windows gets new directories,
-          #    a short path to stay under the Windows limit, and a time limit.
+          # Bazel gets its dependencies in the loading and analysis phases. A
+          # download can fail for a moment, so try them up to three times before
+          # the tests. On Windows each attempt gets new short directories and a
+          # time limit, so that a server that stopped or hangs is not in the way.
           for attempt in 1 2 3; do
             startup=""; limit=""
             if [[ "$RUNNER_OS" == Windows ]]; then
               startup="--output_user_root=C:/u$attempt --output_base=C:/b$attempt"
+              if [[ -n "$SERVER_JDK" ]]; then startup+=" --server_javabase=$(cygpath -m "$SERVER_JDK")"; fi
               limit="timeout 600"
             fi
             [[ $attempt == 1 ]] && bazel $startup version
@@ -137,21 +147,35 @@ jobs:
       - name: Build and test the test module
         shell: bash
         working-directory: rendered/registry
-        timeout-minutes: 15
+        timeout-minutes: 25
+        env:
+          SERVER_JDK: ${{ steps.jdk.outputs.path }}
         run: |
           if [[ "$RUNNER_OS" == Windows ]]; then
             registry="file:///$(pwd -W)"
-            startup="--output_user_root=C:/u1 --output_base=C:/t"
           else
             registry="file://$(pwd)"
-            startup=""
           fi
+          flags=(--registry="$registry" --registry=https://bcr.bazel.build)
           scratch="$(mktemp -d)"
           cp -R "modules/${{ needs.render.outputs.module }}/${{ needs.render.outputs.module_version }}/overlay/test_module/." "$scratch"
           sed -i.bak '/^local_path_override(/,/^)/d' "$scratch/MODULE.bazel" && rm "$scratch/MODULE.bazel.bak"
           cd "$scratch"
-          bazel $startup test --verbose_failures --test_output=errors \
-            --registry="$registry" --registry=https://bcr.bazel.build //...
+          # The same three attempts as the step before, in directories of their own.
+          for attempt in 1 2 3; do
+            startup=""; limit=""
+            if [[ "$RUNNER_OS" == Windows ]]; then
+              startup="--output_user_root=C:/u$attempt --output_base=C:/t$attempt"
+              if [[ -n "$SERVER_JDK" ]]; then startup+=" --server_javabase=$(cygpath -m "$SERVER_JDK")"; fi
+              limit="timeout 600"
+            fi
+            if $limit bazel $startup build --nobuild "${flags[@]}" //...; then break; fi
+            echo "::warning::Attempt $attempt of the loading and analysis phases of the test module failed."
+            [[ $attempt == 3 ]] && exit 1
+            if [[ "$RUNNER_OS" == Windows ]]; then taskkill //F //IM java.exe >/dev/null 2>&1 || true; fi
+            sleep $((attempt * 20))
+          done
+          bazel $startup test --verbose_failures --test_output=errors "${flags[@]}" //...
 
       # "Server terminated abruptly" in the log of the client says nothing about
       # the cause. The cause is in these files, and the runner is deleted after
@@ -160,7 +184,7 @@ jobs:
         if: failure() && runner.os == 'Windows'
         shell: bash
         run: |
-          for b in C:/b1 C:/b2 C:/b3 C:/t; do
+          for b in C:/b1 C:/b2 C:/b3 C:/t1 C:/t2 C:/t3; do
             [[ -d $b ]] || continue
             echo "=== $b"; tail -n 60 $b/server/jvm.out 2>/dev/null || echo "no jvm.out"
             ls -la $b/server $b/*.log $b/hs_err* 2>/dev/null || true
@@ -170,12 +194,10 @@ jobs:
         with:
           name: bazel-server-logs-${{ matrix.platform.runner }}-bazel-${{ matrix.bazel }}
           path: |
-            C:/b?/server/jvm.out
-            C:/b?/server/hs_err*.log
-            C:/b?/hs_err*.log
-            C:/b?/java.log*
-            C:/t/server/jvm.out
-            C:/t/server/hs_err*.log
+            C:/[bt]?/server/jvm.out
+            C:/[bt]?/server/hs_err*.log
+            C:/[bt]?/hs_err*.log
+            C:/[bt]?/java.log*
           if-no-files-found: ignore
           retention-days: 30
 
