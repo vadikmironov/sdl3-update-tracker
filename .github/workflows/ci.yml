@@ -54,7 +54,7 @@ jobs:
           echo "upstream_version=${VERSION:-$(python3 -c 'import json; print(json.load(open("upstream.json"))["version"])')}" >> "$GITHUB_OUTPUT"
       - name: "Canary: each check of the gate still fails on a bad input"
         run: tools/common/canary.py
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rendered
           path: rendered/
@@ -86,7 +86,7 @@ jobs:
     env:
       USE_BAZEL_VERSION: ${{ matrix.bazel }}
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rendered
           path: rendered
@@ -189,7 +189,7 @@ jobs:
             echo "=== $b"; tail -n 60 $b/server/jvm.out 2>/dev/null || echo "no jvm.out"
             ls -la $b/server $b/*.log $b/hs_err* 2>/dev/null || true
           done
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure() && runner.os == 'Windows'
         with:
           name: bazel-server-logs-${{ matrix.platform.runner }}-bazel-${{ matrix.bazel }}
@@ -217,7 +217,7 @@ jobs:
     env:
       USE_BAZEL_VERSION: "9.x"
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rendered
           path: rendered
@@ -263,7 +263,7 @@ jobs:
           curl -fsSL -o /usr/local/bin/bazel \
             "https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64"
           chmod +x /usr/local/bin/bazel
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rendered
           path: rendered
@@ -312,7 +312,7 @@ jobs:
             "https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64"
           chmod +x /usr/local/bin/bazel
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rendered
           path: rendered
@@ -342,7 +342,7 @@ jobs:
       - name: The two define sets are identical
         shell: bash
         run: tools/module/diff_config.sh generated.h oracle.h
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: build-config-${{ matrix.image.id }}
@@ -397,7 +397,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rendered
           path: ${{ runner.temp }}/rendered
