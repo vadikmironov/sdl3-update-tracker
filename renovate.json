@@ -3,6 +3,7 @@
     "extends": ["config:recommended"],
     "enabledManagers": ["custom.regex"],
     "minimumReleaseAge": "3 days",
+    "semanticCommits": "disabled",
     "statusCheckNames": {
         "minimumReleaseAge": null
     },
