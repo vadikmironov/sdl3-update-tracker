@@ -440,7 +440,7 @@ int main(void) {
     ),
 ]
 
-# https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/CMakeLists.txt#L1850-L1941
+# https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/CMakeLists.txt#L1865-L1956
 _LINUX_INPUT_CHECKS = [
     _builds(
         "HAVE_LINUX_INPUT_H",
@@ -486,9 +486,9 @@ _UNIX_CHECKS = [
         "HAVE_O_CLOEXEC",
         "#include <fcntl.h>\nint flag = O_CLOEXEC;\nint main(void) { return 0; }\n",
     ),
-    # https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/CMakeLists.txt#L2085-L2096
+    # https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/CMakeLists.txt#L2100-L2111
     checks.AC_CHECK_FUNC("clock_gettime", copts = _PROBE_COPTS, define = "HAVE_CLOCK_GETTIME"),
-    # https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/CMakeLists.txt#L3472-L3519
+    # https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/CMakeLists.txt#L3487-L3534
     checks.AC_TRY_LINK(
         code = """#include <spawn.h>
 #include <unistd.h>
@@ -522,7 +522,7 @@ int main(void) {
 
 # Subsystems whose CMake answer on Linux follows from the build options this
 # module fixes (the Bazel equivalents of the -DSDL_*=ON/OFF choices).
-# https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/CMakeLists.txt#L1774-L2137
+# https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/CMakeLists.txt#L1774-L2152
 _LINUX_FIXED = [
     # Audio: ALSA loaded at runtime; PulseAudio, PipeWire, JACK, sndio, OSS off.
     # https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/cmake/sdlchecks.cmake#L100-L135

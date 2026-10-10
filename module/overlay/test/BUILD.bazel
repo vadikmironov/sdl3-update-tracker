@@ -6,7 +6,7 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 # left out is pretest, which upstream builds for 32-bit Windows only.
 # SDL_TESTS_QUICK=1 as SDL's CI sets it for the whole ctest run.
 # https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/test/CMakeLists.txt#L497-L505
-# https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/.github/workflows/generic.yml#L244-L245
+# https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/.github/workflows/generic.yml#L245-L246
 _ENV = {
     "SDL_ASSERT": "abort",
     "SDL_AUDIO_DRIVER": "dummy",
