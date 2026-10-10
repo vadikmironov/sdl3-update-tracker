@@ -364,7 +364,7 @@ jobs:
           STATE: ${{ needs.render.outputs.permalinks }}
         run: |
           if [[ "$STATE" == "needs-a-person" ]]; then
-            echo "::error::The text under a permalink changed upstream. See the summary of the Render job. Correct the link in module/, then run tools/common/check_permalinks.py --fix."
+            echo "::error::The text under a permalink changed upstream. See the summary of the Render job. Run tools/common/check_permalinks.py --fix, then correct the links that it lists."
             exit 1
           fi
 
