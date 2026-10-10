@@ -21,6 +21,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 import permalinks  # noqa: E402
+from render import EXIT_PERMALINKS  # noqa: E402
 
 failures = []
 
@@ -48,18 +49,31 @@ def canary_render_check(tmp):
         shutil.copytree(rendered, bcr / "modules" / name)
         version_dir = next(p for p in (bcr / "modules" / name).iterdir() if p.is_dir())
         damage(version_dir)
-        return run(sys.executable, str(HERE / "render.py"), "--offline", "--out", str(tmp / "out"), "--check", str(bcr))
+        result = run(sys.executable, str(HERE / "render.py"), "--offline", "--out", str(tmp / "out"), "--check", str(bcr))
+        # Exit code 3 also comes when a permalink needs a person, so read the
+        # verdict of the check from its own message too.
+        rendered_ok = result.returncode in (0, EXIT_PERMALINKS)
+        if rendered_ok and "check: byte-identical" in result.stdout:
+            return "identical"
+        if not rendered_ok and "the render is NOT identical" in result.stderr:
+            return "refused"
+        return "exit code %d: %s" % (result.returncode, (result.stdout + result.stderr).strip()[-200:])
 
-    expect("render --check passes on an exact copy", fake_bcr("exact", lambda d: None).returncode == 0)
+    verdict = fake_bcr("exact", lambda d: None)
+    expect("render --check passes on an exact copy", verdict == "identical", verdict)
 
     def one_byte(d):
         f = d / "overlay" / "BUILD.bazel"
         f.write_bytes(f.read_bytes() + b"\n")
 
-    expect("render --check sees one changed byte", fake_bcr("byte", one_byte).returncode != 0)
-    expect("render --check sees a file that BCR has and the render does not", fake_bcr("extra", lambda d: (d / "overlay" / "extra.bzl").write_text("x\n")).returncode != 0)
-    expect("render --check sees a file that the render has and BCR does not", fake_bcr("absent", lambda d: (d / "presubmit.yml").unlink()).returncode != 0)
-    expect("render --check sees a changed hash in source.json", fake_bcr("hash", lambda d: (d / "source.json").write_text((d / "source.json").read_text().replace("sha256-", "sha256-A", 1))).returncode != 0)
+    for what, label, damage in (
+        ("one changed byte", "byte", one_byte),
+        ("a file that BCR has and the render does not", "extra", lambda d: (d / "overlay" / "extra.bzl").write_text("x\n")),
+        ("a file that the render has and BCR does not", "absent", lambda d: (d / "presubmit.yml").unlink()),
+        ("a changed hash in source.json", "hash", lambda d: (d / "source.json").write_text((d / "source.json").read_text().replace("sha256-", "sha256-A", 1))),
+    ):
+        verdict = fake_bcr(label, damage)
+        expect("render --check sees " + what, verdict == "refused", verdict)
 
 
 def canary_permalinks(tmp):
