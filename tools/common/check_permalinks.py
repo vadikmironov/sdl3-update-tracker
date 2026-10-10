@@ -9,9 +9,11 @@ reports a link that it cannot move.
     check_permalinks.py --version 3.0.8   # the same, for a different version
     check_permalinks.py --version 3.0.8 --fix
 
-`--fix` writes the new line numbers of each `moved` link into module/. It sets
-`permalinks_verified_for` only when no link stays `changed` or `missing`:
-correct those links by hand, then run `--fix` again.
+`--fix` writes the new line numbers of each `moved` link into module/ and sets
+`permalinks_verified_for` to the examined version, in the same run, so a second
+run changes nothing. Then it lists each `changed` or `missing` link: correct
+those by hand, with the line numbers of that version. After this run, nothing
+checks them.
 """
 
 import argparse
@@ -38,7 +40,7 @@ def main():
     verified = upstream.get("permalinks_verified_for", upstream["version"])
     cache = pathlib.Path(args.cache).expanduser()
 
-    counts, new_texts = {}, {}
+    counts, new_texts, to_correct = {}, {}, []
     for source in sorted(p for p in (ROOT / "module").rglob("*") if p.is_file()):
         try:
             text = source.read_text()
@@ -51,23 +53,30 @@ def main():
             counts[state] = counts.get(state, 0) + 1
             if state != "same":
                 print("%-8s %s: %s  %s" % (state, source.relative_to(ROOT), link.split("/blob/")[1], note))
+            if state in permalinks.NEEDS_A_PERSON:
+                to_correct.append("%s: %s" % (source.relative_to(ROOT), link.split("/blob/")[1]))
         if new_text != text:
             new_texts[source] = new_text
 
     summary = ", ".join("%d %s" % (n, s) for s, n in sorted(counts.items())) or "no links"
     print("check_permalinks: line numbers verified for %s, examined at %s: %s" % (verified, version, summary))
-    needs_a_person = any(counts.get(s) for s in permalinks.NEEDS_A_PERSON)
+    needs_a_person = bool(to_correct)
 
     if args.fix:
         for source, text in new_texts.items():
             source.write_text(text)
             print("check_permalinks: wrote new line numbers into %s" % source.relative_to(ROOT))
-        if needs_a_person:
-            sys.exit("check_permalinks: correct the links above by hand in module/, then run --fix again")
+        # The moved links now have the line numbers of `version`. Record it in
+        # the same run, or a second run would move them again.
         if verified != version:
             upstream["permalinks_verified_for"] = version
             upstream_path.write_text(json.dumps(upstream, indent=4) + "\n")
             print("check_permalinks: permalinks_verified_for is now %s" % version)
+        if needs_a_person:
+            print("check_permalinks: correct these links by hand, with the line numbers of %s. Nothing checks them after this run:" % version)
+            for line in to_correct:
+                print("    " + line)
+            sys.exit(1)
         return
     if needs_a_person:
         sys.exit(1)
