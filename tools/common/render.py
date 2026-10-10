@@ -214,8 +214,8 @@ def main():
     if needs_a_person:
         # The output is complete and can be built. Exit code 3 means only this.
         print(
-            "render: a permalink needs a person. Correct the link in module/, then run "
-            "tools/common/check_permalinks.py --fix, which also does the links that only moved.",
+            "render: a permalink needs a person. Run tools/common/check_permalinks.py --fix, which moves "
+            "the links that only moved, then correct the links that it lists.",
             file=sys.stderr,
         )
         sys.exit(EXIT_PERMALINKS)
