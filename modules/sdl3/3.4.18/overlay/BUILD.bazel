@@ -30,8 +30,8 @@ _LOCAL_DEFINES = ["SDL_STATIC_LIB"] + _VERSION_DEFINES
 
 # CMake enables the Steam storage backend on Windows and macOS; the build
 # configs SDL ships for them do not.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L2382-L2386
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L2648-L2654
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L2397-L2401
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L2663-L2669
 _STEAM_DEFINES = ["SDL_STORAGE_STEAM=1"]
 
 # layering_check: SDL includes X11 headers from modules it does not depend on
@@ -44,7 +44,7 @@ _FEATURES = [
 
 # -w: SDL builds as someone else's dependency here, where its warnings are noise.
 # -fno-strict-aliasing is correctness, not warnings: SDL's code relies on it.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlcompilers.cmake#L80-L83
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlcompilers.cmake#L80-L83
 _COPTS = select({
     "@rules_cc//cc/compiler:clang-cl": ["/w"],
     "@rules_cc//cc/compiler:msvc-cl": ["/w"],
@@ -55,7 +55,7 @@ _COPTS = select({
 })
 
 # DEBUG in debug builds, as upstream defines it for its Debug configuration.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L484
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L484
 config_setting(
     name = "debug_build",
     values = {"compilation_mode": "dbg"},
@@ -67,7 +67,7 @@ _DEBUG_DEFINES = select({
 })
 
 # Large files and a 64-bit time_t, which upstream sets on 32-bit Linux only.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L512-L519
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L512-L519
 [
     config_setting(
         name = "linux_" + cpu,
@@ -142,7 +142,7 @@ autoconf_hdr(
         # Not the headers' version: these decide which libxkbcommon symbols SDL
         # demands from the library it dlopens, and a missing one disables the
         # Wayland driver at runtime with no diagnostic. 0.5.0 is SDL's floor.
-        # https://github.com/libsdl-org/SDL/blob/release-3.4.16/src/video/wayland/SDL_waylandsym.h#L164-L174
+        # https://github.com/libsdl-org/SDL/blob/release-3.4.18/src/video/wayland/SDL_waylandsym.h#L164-L174
         "@SDL_XKBCOMMON_VERSION_MAJOR@": "0",
         "@SDL_XKBCOMMON_VERSION_MINOR@": "5",
         "@SDL_XKBCOMMON_VERSION_PATCH@": "0",
@@ -166,7 +166,7 @@ cc_library(
 
 # The EGL, GLES and Vulkan headers SDL vendors. Upstream adds them with
 # -idirafter, so installed system copies win there; here they always win.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L554-L558
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L554-L558
 cc_library(
     name = "khronos_headers",
     hdrs = glob(["src/video/khronos/**/*.h"]),
@@ -196,8 +196,8 @@ cc_library(
 
 # Compiled everywhere: the backend files under these directories select
 # themselves with the build config's SDL_* macros, as SDL's CMake globs do.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1235-L1294
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L3524-L3567
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1235-L1294
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L3539-L3582
 _COMMON_SRCS = glob([
     "src/*.c",
     "src/atomic/*.c",
@@ -247,11 +247,11 @@ _COMMON_SRCS = glob([
     "src/video/yuv2rgb/*.c",
 ])
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L616-L641
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L616-L641
 _WAYLAND = wayland_protocol_sources(glob(["wayland-protocols/*.xml"]))
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1774-L2137
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L1090-L1101
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1774-L2152
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L1090-L1101
 _LINUX_SRCS = glob([
     "src/audio/alsa/*.c",
     "src/camera/v4l2/*.c",
@@ -273,7 +273,7 @@ _LINUX_SRCS = glob([
     "src/video/x11/*.c",
 ]) + [
     # The rest of src/core/linux needs D-Bus or libudev.
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1990-L2060
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L2005-L2075
     "src/core/linux/SDL_evdev.c",
     "src/core/linux/SDL_evdev_capabilities.c",
     "src/core/linux/SDL_evdev_kbd.c",
@@ -281,8 +281,8 @@ _LINUX_SRCS = glob([
     "src/filesystem/posix/SDL_sysfsops.c",
 ] + _WAYLAND.srcs + _WAYLAND.hdrs
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L2493-L2660
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L3454-L3456
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L2508-L2675
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L3469-L3471
 _MACOS_SRCS = glob([
     "src/haptic/darwin/*.c",
     "src/joystick/darwin/*.c",
@@ -296,8 +296,8 @@ _MACOS_SRCS = glob([
     "src/filesystem/posix/SDL_sysfsops.c",
 ]
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L2165-L2488
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L3465-L3471
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L2180-L2503
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L3480-L3486
 _WINDOWS_SRCS = glob(
     [
         "src/audio/directsound/*.c",
@@ -327,21 +327,21 @@ _WINDOWS_SRCS = glob(
         "src/video/windows/*.cpp",
     ],
 ) + [
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L2337-L2351
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L2352-L2366
     "src/thread/generic/SDL_syscond.c",
     "src/thread/generic/SDL_sysrwlock.c",
 ]
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1107-L1112
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L967-L969
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1107-L1112
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L967-L969
 _LINUX_LINKOPTS = [
     "-ldl",
     "-lm",
     "-pthread",
 ]
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L2390
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L2452
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L2405
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L2467
 _WINDOWS_LINKOPTS = [lib + ".lib" for lib in [
     "advapi32",
     "dinput8",
@@ -358,7 +358,7 @@ _WINDOWS_LINKOPTS = [lib + ".lib" for lib in [
     "winmm",
 ]]
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L2755-L2821
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L2770-L2836
 _MACOS_FRAMEWORKS = [
     "AudioToolbox",
     "AVFoundation",
@@ -397,7 +397,7 @@ _MACOS_LINKOPTS = [
 ]
 
 # The Objective-C sources; objc_wrappers.bzl explains the wrapping.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L2493-L2750
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L2508-L2765
 _OBJC_SRCS = glob([
     "src/audio/coreaudio/*.m",
     "src/camera/coremedia/*.m",
@@ -422,7 +422,7 @@ cc_library(
     name = "sdl3_macos_objc",
     srcs = [":macos_objc_wrappers"],
     # ARC as upstream compiles every Apple source with, and requires.
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L3866-L3871
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L3881-L3886
     copts = _COPTS + [
         "-x",
         "objective-c",
@@ -440,7 +440,7 @@ cc_library(
 )
 
 # The Linux libraries SDL loads at runtime by soname, as upstream does.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L234
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L234
 cc_headers_only(
     name = "linux_runtime_loaded_headers",
     target_compatible_with = _LINUX_ONLY,
@@ -497,8 +497,8 @@ cc_library(
         # _REENTRANT as upstream's pthread check adds it. USING_GENERATED_CONFIG_H
         # makes SDL's shipped dispatch header #error if it were ever picked up
         # instead of the generated one.
-        # https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L967-L969
-        # https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L547
+        # https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L967-L969
+        # https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L547
         "@platforms//os:linux": [
             "_REENTRANT",
             "USING_GENERATED_CONFIG_H",
@@ -512,8 +512,8 @@ cc_library(
 )
 
 # SDL3_test, the helper library SDL's own tests link.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L495-L500
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L4076-L4078
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L495-L500
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L4091-L4093
 cc_library(
     name = "sdl3_test",
     srcs = glob(["src/test/*.c"]),

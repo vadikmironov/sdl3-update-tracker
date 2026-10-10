@@ -2,7 +2,7 @@
 
 module(
     name = "sdl3",
-    version = "3.4.16",
+    version = "3.4.18",
     # rules_cc_autoconf uses attr.string_keyed_label_dict, added in Bazel 7.4.0.
     bazel_compatibility = [">=7.4.0"],
     compatibility_level = 1,

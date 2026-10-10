@@ -49,8 +49,8 @@ load("@rules_cc_autoconf//autoconf:checks.bzl", "checks")
 
 # What CMake puts in front of every probe on Linux: _GNU_SOURCE for the
 # whole libc, _REENTRANT from the pthread check.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L124
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L967-L969
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L124
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L967-L969
 _PROBE_COPTS = [
     "-D_GNU_SOURCE=1",
     "-D_REENTRANT",
@@ -87,7 +87,7 @@ def _builds(define, code, copts = [], linkopts = [], requires = None):
 def _decl(symbol, headers):
     # CMake's check_symbol_exists: a macro passes, a function has to link.
     # CMake links libm into these probes.
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1107-L1119
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1107-L1119
     return _builds(
         _define_name("HAVE_", symbol),
         "\n".join(_includes(headers)) + """
@@ -105,7 +105,7 @@ int main(void) {
 # C library
 # =============================================================================
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1046-L1076
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1046-L1076
 _LIBC_HEADERS = [
     "float.h",
     "iconv.h",
@@ -130,7 +130,7 @@ _LIBC_HEADERS = [
 
 # CMake probes each symbol against every header found above; here each one is
 # probed with the header that declares it. The MSVC names are upstream's list.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1078-L1119
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1078-L1119
 _LIBC_SYMBOLS = {
     "math.h": [
         "acos",
@@ -245,7 +245,7 @@ _LIBC_SYMBOLS = {
 
 # isinf/isnan: whether the double and float forms compile with float
 # conversions as errors, and whether the f-suffixed functions exist.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1121-L1158
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1121-L1158
 _FLOAT_CLASS_COPTS = [
     "-Wfloat-conversion",
     "-Werror",
@@ -271,7 +271,7 @@ def _float_class_checks(fn):
         ),
     ]
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1160-L1182
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1160-L1182
 _UNIX_SYMBOLS = [
     ("fdatasync", ["unistd.h"]),
     ("gethostname", ["unistd.h"]),
@@ -297,7 +297,7 @@ _UNIX_SYMBOLS = [
 ]
 
 SDL3_CONFIG_CHECKS_LIBC = [
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1043-L1045
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1043-L1045
     checks.AC_DEFINE("HAVE_LIBC", "1"),
 ] + [
     _header(header)
@@ -311,13 +311,13 @@ SDL3_CONFIG_CHECKS_LIBC = [
     for symbol, headers in _UNIX_SYMBOLS
 ] + [
     # iconv from the C library; libiconv is not probed.
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1183-L1210
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1183-L1210
     checks.AC_TRY_LINK(
         code = "#define LIBICONV_PLUG 1\n#include <stddef.h>\n#include <iconv.h>\nint main(void) { return !iconv_open(NULL, NULL); }\n",
         copts = _PROBE_COPTS,
         define = "HAVE_ICONV",
     ),
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1212-L1213
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1212-L1213
     checks.AC_CHECK_MEMBER(
         "struct sigaction.sa_sigaction",
         copts = _PROBE_COPTS,
@@ -331,7 +331,7 @@ SDL3_CONFIG_CHECKS_LIBC = [
         includes = _includes(["sys/stat.h"]),
     ),
     # SDL_DISABLE_ALLOCA is MSVC-only, so it is never set here.
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1025-L1040
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1025-L1040
     _header("alloca.h"),
 ]
 
@@ -339,7 +339,7 @@ SDL3_CONFIG_CHECKS_LIBC = [
 # Compiler
 # =============================================================================
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L618-L640
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L618-L640
 SDL3_CONFIG_CHECKS_COMPILER = [
     _builds(
         "HAVE_GCC_ATOMICS",
@@ -371,8 +371,8 @@ SDL3_CONFIG_CHECKS_COMPILER = [
 # =============================================================================
 
 # CMake adds -D_REENTRANT -pthread to every probe here.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L967-L969
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L1020-L1088
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L967-L969
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L1020-L1088
 _PTHREAD = {
     "copts": ["-pthread"],
     "linkopts": ["-pthread"],
@@ -440,7 +440,7 @@ int main(void) {
     ),
 ]
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1850-L1941
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1865-L1956
 _LINUX_INPUT_CHECKS = [
     _builds(
         "HAVE_LINUX_INPUT_H",
@@ -476,8 +476,8 @@ int main(void) {
     ]),
 ]
 
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L52-L72
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1375-L1391
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L52-L72
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1375-L1391
 _UNIX_CHECKS = [
     _decl("dlopen", ["dlfcn.h"]),
     checks.AC_DEFINE("SDL_LOADSO_DLOPEN", "1", requires = ["HAVE_DLOPEN"]),
@@ -486,9 +486,9 @@ _UNIX_CHECKS = [
         "HAVE_O_CLOEXEC",
         "#include <fcntl.h>\nint flag = O_CLOEXEC;\nint main(void) { return 0; }\n",
     ),
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L2085-L2096
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L2100-L2111
     checks.AC_CHECK_FUNC("clock_gettime", copts = _PROBE_COPTS, define = "HAVE_CLOCK_GETTIME"),
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L3472-L3519
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L3487-L3534
     checks.AC_TRY_LINK(
         code = """#include <spawn.h>
 #include <unistd.h>
@@ -522,17 +522,17 @@ int main(void) {
 
 # Subsystems whose CMake answer on Linux follows from the build options this
 # module fixes (the Bazel equivalents of the -DSDL_*=ON/OFF choices).
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/CMakeLists.txt#L1774-L2137
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/CMakeLists.txt#L1774-L2152
 _LINUX_FIXED = [
     # Audio: ALSA loaded at runtime; PulseAudio, PipeWire, JACK, sndio, OSS off.
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L100-L135
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L100-L135
     checks.AC_DEFINE("SDL_AUDIO_DRIVER_ALSA", "1"),
     checks.AC_DEFINE("SDL_AUDIO_DRIVER_ALSA_DYNAMIC", '"libasound.so.2"'),
     checks.AC_DEFINE("SDL_AUDIO_DRIVER_DISK", "1"),
     checks.AC_DEFINE("SDL_AUDIO_DRIVER_DUMMY", "1"),
     # Joysticks: HIDAPI without a backend (hidraw needs libudev, libusb is
     # off); CMake ties the virtual joystick to SDL_HIDAPI.
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L1248-L1307
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L1248-L1307
     checks.AC_DEFINE("SDL_JOYSTICK_HIDAPI", "1"),
     checks.AC_DEFINE("SDL_JOYSTICK_VIRTUAL", "1"),
     checks.AC_DEFINE("SDL_SENSOR_DUMMY", "1"),
@@ -547,7 +547,7 @@ _LINUX_FIXED = [
     checks.AC_DEFINE("SDL_VIDEO_DRIVER_OFFSCREEN", "1"),
     # OpenGL over EGL (no GLX: GL/glx.h is Mesa's, not a Bazel module),
     # GLES2 and Vulkan from the headers SDL vendors in src/video/khronos.
-    # https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L861-L937
+    # https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L861-L937
     checks.AC_DEFINE("SDL_VIDEO_OPENGL", "1"),
     checks.AC_DEFINE("SDL_VIDEO_OPENGL_EGL", "1"),
     checks.AC_DEFINE("SDL_VIDEO_OPENGL_ES2", "1"),
@@ -564,8 +564,8 @@ _LINUX_FIXED = [
 # from the system library. The newest are from libXi 1.7 (2013), and a missing
 # one turns off that extension only, not the X11 driver. Xscrnsaver and XTest
 # have no Bazel module.
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L273-L564
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/src/video/x11/SDL_x11sym.h#L177-L184
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L273-L564
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/src/video/x11/SDL_x11sym.h#L177-L184
 _X11_FIXED = [
     checks.AC_DEFINE("SDL_VIDEO_DRIVER_X11", "1"),
     checks.AC_DEFINE("SDL_VIDEO_DRIVER_X11_DYNAMIC", '"libX11.so.6"'),
@@ -590,7 +590,7 @@ _X11_FIXED = [
 
 # Wayland, loaded at runtime by soname; the protocol code is generated from
 # the XML files SDL ships. No libdecor (no Bazel module).
-# https://github.com/libsdl-org/SDL/blob/release-3.4.16/cmake/sdlchecks.cmake#L643-L763
+# https://github.com/libsdl-org/SDL/blob/release-3.4.18/cmake/sdlchecks.cmake#L643-L763
 _WAYLAND_FIXED = [
     checks.AC_DEFINE("SDL_VIDEO_DRIVER_WAYLAND", "1"),
     checks.AC_DEFINE("SDL_VIDEO_DRIVER_WAYLAND_DYNAMIC", '"libwayland-client.so.0"'),
