@@ -21,7 +21,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 import permalinks  # noqa: E402
-from render import EXIT_PERMALINKS  # noqa: E402
+from render import EXIT_PERMALINKS, bcr_revision  # noqa: E402
 
 failures = []
 
@@ -128,12 +128,30 @@ def canary_gate():
     expect("gate: ci.yml still has this same expression", code in workflow)
 
 
+def canary_bcr_revision():
+    """A bump changes only `version`: a revision for the old version must not carry over."""
+    for upstream, want, name in (
+        ({"version": "1.1", "bcr_revision": 1, "bcr_revision_for": "1.0"}, 0, "a revision for the old version does not apply"),
+        ({"version": "1.0", "bcr_revision": 1, "bcr_revision_for": "1.0"}, 1, "a revision for this version applies"),
+        ({"version": "1.0", "bcr_revision": 0}, 0, "no revision"),
+    ):
+        got = bcr_revision(upstream)
+        expect("bcr_revision: " + name, got == want, "got %d" % got)
+    try:
+        bcr_revision({"version": "1.0", "bcr_revision": 1})
+        refused = False
+    except SystemExit:
+        refused = True
+    expect("bcr_revision: a revision without bcr_revision_for is refused", refused)
+
+
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         tmp = pathlib.Path(tmp)
         canary_render_check(tmp)
         canary_permalinks(tmp)
         canary_gate()
+        canary_bcr_revision()
         module_canary = ROOT / "tools" / "module" / "canary.sh"
         if module_canary.exists():
             result = run(str(module_canary))

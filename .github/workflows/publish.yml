@@ -25,7 +25,7 @@ on:
         required: false
         type: string
       bcr_revision:
-        description: "N of a BCR-only revision .bcr.N; default: upstream.json"
+        description: "N of a BCR-only revision .bcr.N of the staged version; default: upstream.json"
         required: false
         type: string
 

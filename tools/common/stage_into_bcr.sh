@@ -23,7 +23,7 @@ target="$bcr/modules/$name/$version"
 echo "stage: $name@$version -> $target"
 
 if [[ -e "$target" ]]; then
-  echo "stage: BCR already has $name@$version. A BCR version is permanent; use bcr_revision in upstream.json for a fix." >&2
+  echo "stage: BCR already has $name@$version. A BCR version is permanent; for a fix, set bcr_revision and bcr_revision_for in upstream.json." >&2
   exit 3
 fi
 [[ -d "$bcr/modules/$name" ]] || { echo "stage: BCR has no module $name; the first version of a module is manual work" >&2; exit 3; }
