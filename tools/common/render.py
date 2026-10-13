@@ -35,6 +35,20 @@ TOKEN_MODULE = b"%{module_version}"
 EXIT_PERMALINKS = 3
 
 
+def bcr_revision(upstream):
+    """N of .bcr.N for upstream["version"]; 0 when the revision is for a different version.
+
+    A revision belongs to the version in `bcr_revision_for`. A bump changes only
+    `version`, so a revision for the old version must not carry over to the new one.
+    """
+    revision = upstream.get("bcr_revision", 0)
+    if not revision:
+        return 0
+    if "bcr_revision_for" not in upstream:
+        sys.exit("upstream.json: bcr_revision %d needs bcr_revision_for, the version it is for" % revision)
+    return revision if upstream["bcr_revision_for"] == upstream["version"] else 0
+
+
 def integrity(data):
     return "sha256-" + base64.b64encode(hashlib.sha256(data).digest()).decode()
 
@@ -95,7 +109,7 @@ def download(url, cache, offline):
 
 def render(module_dir, consumers_dir, out, upstream, cache, offline):
     name = upstream["module"]
-    r = Renderer(upstream["version"], upstream.get("bcr_revision", 0), upstream.get("permalinks_verified_for"), cache, offline)
+    r = Renderer(upstream["version"], bcr_revision(upstream), upstream.get("permalinks_verified_for"), cache, offline)
 
     registry = out / "registry"
     for stale in (registry, out / "consumers"):
@@ -167,7 +181,7 @@ def check(version_dir, name, module_version, bcr):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--version", help="upstream version; default: upstream.json")
-    parser.add_argument("--bcr-revision", type=int, help="N of .bcr.N; default: upstream.json")
+    parser.add_argument("--bcr-revision", type=int, help="N of .bcr.N for the rendered version; default: upstream.json")
     parser.add_argument("--out", default=str(ROOT / "rendered"), help="output directory; default: rendered/")
     parser.add_argument("--cache", default=str(ROOT / ".cache"), help="where downloaded archives stay")
     parser.add_argument("--offline", action="store_true", help="fail if the archive is not in the cache")
@@ -179,6 +193,9 @@ def main():
         upstream["version"] = args.version
     if args.bcr_revision is not None:
         upstream["bcr_revision"] = args.bcr_revision
+        upstream["bcr_revision_for"] = upstream["version"]
+    if upstream.get("bcr_revision") and not bcr_revision(upstream):
+        print("render: bcr_revision %d is for %s, not %s; it does not apply" % (upstream["bcr_revision"], upstream["bcr_revision_for"], upstream["version"]))
 
     out = pathlib.Path(args.out).expanduser().resolve()
     try:

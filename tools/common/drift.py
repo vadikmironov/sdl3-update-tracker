@@ -30,6 +30,9 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 REMINDER_DAYS = 7
 
+sys.path.insert(0, str(HERE))
+from render import bcr_revision  # noqa: E402
+
 
 def gh(*args):
     return subprocess.run(["gh", *args], check=True, capture_output=True, text=True).stdout
@@ -50,7 +53,8 @@ def main():
     owner = os.environ.get("GITHUB_REPOSITORY_OWNER", repo.split("/")[0] if repo else "")
     upstream = json.loads((ROOT / "upstream.json").read_text())
     name = upstream["module"]
-    ours = upstream["version"] + (".bcr.%d" % upstream["bcr_revision"] if upstream.get("bcr_revision") else "")
+    revision = bcr_revision(upstream)
+    ours = upstream["version"] + (".bcr.%d" % revision if revision else "")
     bcr_module = pathlib.Path(args.bcr).expanduser() / "modules" / name
     theirs = json.loads((bcr_module / "metadata.json").read_text())["versions"]
     print("drift: this repository has %s@%s; BCR has %s" % (name, ours, ", ".join(theirs)))
