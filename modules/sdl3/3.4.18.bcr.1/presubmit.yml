@@ -1,6 +1,5 @@
 matrix:
   platform:
-    - ubuntu2004
     - ubuntu2204
     - ubuntu2404
     - ubuntu2404_arm64
@@ -26,7 +25,6 @@ bcr_test_module:
   module_path: test_module
   matrix:
     platform:
-      - ubuntu2004
       - ubuntu2204
       - ubuntu2404
       - ubuntu2404_arm64
