@@ -202,18 +202,22 @@ jobs:
           retention-days: 30
 
   consumers:
-    # On macOS, the module compiles Objective-C. These consumers make sure that
-    # it does so with each C++ toolchain a consumer can have.
-    name: macOS arm64, consumer ${{ matrix.consumer.name }}
+    # On macOS, the module compiles Objective-C. The first two consumers make
+    # sure that it does so with each C++ toolchain a consumer can have. The
+    # third builds with external_include_paths, as strict consumers do. The
+    # feature moves the search paths of every other repository to -isystem,
+    # those of the module and of its dependencies included.
+    name: ${{ matrix.consumer.platform }}, consumer ${{ matrix.consumer.name }}
     needs: render
-    runs-on: macos-latest
+    runs-on: ${{ matrix.consumer.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         consumer:
-          - { name: "with rules_cc only", dir: rules_cc_only }
-          - { name: "on toolchains_llvm", dir: toolchains_llvm }
+          - { name: "with rules_cc only", dir: rules_cc_only, platform: "macOS arm64", runner: macos-latest }
+          - { name: "on toolchains_llvm", dir: toolchains_llvm, platform: "macOS arm64", runner: macos-latest }
+          - { name: "with external_include_paths", dir: external_include_paths, platform: "Ubuntu 24.04 x64", runner: ubuntu-24.04 }
     env:
       USE_BAZEL_VERSION: "9.x"
     steps:
@@ -239,6 +243,26 @@ jobs:
           done
           bazel test --verbose_failures --test_output=errors "${flags[@]}" \
             "@${{ needs.render.outputs.module }}//..."
+      # With the feature, a consumer gets the headers of the module with
+      # -isystem, so their warnings stay out of its build. The module would
+      # lose that if it turned the feature off in its own packages, a tempting
+      # fix for a build that fails under it. testver depends on @sdl3 as a
+      # consumer does.
+      - name: The consumer gets the headers of the module with -isystem
+        if: matrix.consumer.dir == 'external_include_paths'
+        working-directory: rendered/consumers/${{ matrix.consumer.dir }}
+        env:
+          MODULE: ${{ needs.render.outputs.module }}
+        run: |
+          registry="file://$(cd ../../registry && pwd)"
+          bazel aquery --registry="$registry" --registry=https://bcr.bazel.build --output=jsonproto \
+            "mnemonic(CppCompile, @$MODULE//test:testver)" > aquery.json
+          python3 - aquery.json "external/$MODULE+/include" <<'PY'
+          import json, sys
+          args = json.load(open(sys.argv[1]))["actions"][0]["arguments"]
+          if ("-isystem", sys.argv[2]) not in set(zip(args, args[1:])):
+              sys.exit("testver gets %s without -isystem" % sys.argv[2])
+          PY
 
   test-ubuntu2004:
     # The oldest image of the BCR presubmit, with a toolchain of the GCC 9 era.

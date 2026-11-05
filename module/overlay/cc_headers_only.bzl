@@ -12,13 +12,7 @@ def _cc_headers_only_impl(ctx):
     return [
         # The headers themselves, so building this target generates them.
         DefaultInfo(files = merged.headers),
-        CcInfo(compilation_context = cc_common.create_compilation_context(
-            framework_includes = merged.framework_includes,
-            headers = merged.headers,
-            includes = merged.includes,
-            quote_includes = merged.quote_includes,
-            system_includes = merged.system_includes,
-        )),
+        CcInfo(compilation_context = merged),
     ]
 
 cc_headers_only = rule(
@@ -26,18 +20,25 @@ cc_headers_only = rule(
     attrs = {
         "deps": attr.label_list(
             providers = [CcInfo],
-            doc = "Libraries whose headers and include paths are forwarded.",
+            doc = "Libraries whose compilation contexts are forwarded.",
         ),
     },
     doc = """\
-This rule gives the headers and include paths of `deps`, and nothing to link.
+This rule gives the compilation context of `deps`, and nothing to link.
 
 A cc_library dependency puts the archives of that dependency on every
 downstream link line. SDL loads these libraries at runtime by soname, and
 compiles only against their headers.
 
-This rule also drops the defines of `deps`. Those defines belong to the builds
-of those libraries. If a dependency starts to export a `HAVE_*` name, that name
-changes the features that SDL compiles, and gives no warning.
+The rule forwards the context as it is. With the external_include_paths
+feature, rules_cc moves each search path of another repository to
+external_includes, and create_compilation_context takes that parameter only
+from rules_cc itself. The paths keep their kind, so they still follow SDL's
+own, and SDL's generated wayland-client-protocol.h still wins over the wayland
+module's. See wayland_protocols.bzl.
+
+The defines of `deps` come with the context. They are XCMSDIR and XLOCALELIBDIR
+of libx11, which SDL does not read. A `HAVE_*` name from a dependency would
+change the features that SDL compiles, and give no warning.
 """,
 )
