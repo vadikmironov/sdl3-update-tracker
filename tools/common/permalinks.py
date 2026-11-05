@@ -19,8 +19,8 @@ Only `changed` and `missing` need a person.
 """
 
 import re
-import urllib.error
-import urllib.request
+
+import net
 
 TOKEN = "%{upstream_version}"
 LINK = re.compile(
@@ -43,9 +43,8 @@ def fetch(owner, repo, ref, path, cache, offline=False):
         raise Offline("%s/%s %s:%s is not in the cache" % (owner, repo, ref, path))
     url = "https://raw.githubusercontent.com/%s/%s/%s/%s" % (owner, repo, ref, path)
     try:
-        with urllib.request.urlopen(url) as response:
-            data = response.read()
-    except urllib.error.HTTPError as e:
+        data = net.read(url)
+    except net.Error as e:
         if e.code == 404:
             return None
         raise

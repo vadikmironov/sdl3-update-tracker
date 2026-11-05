@@ -92,15 +92,20 @@ def main():
         differences = [line for line in result.stdout.splitlines() if line.startswith("check: ") and "byte-identical" not in line]
         if "byte-identical" in result.stdout:
             print("drift: the render of %s is byte-identical to BCR" % ours)
-        else:
+        elif differences:
             problems += 1
             open_issue(
                 "BCR and this repository are different for %s@%s" % (name, ours),
                 "@%s: the render of `module/` is not byte-identical to BCR main.\n\n```\n%s\n```\n\n"
                 "A BCR version does not change after the merge, so examine which side is wrong. "
                 "`tools/common/render.py --check <BCR checkout>` shows this locally."
-                % (owner, "\n".join(differences) or result.stdout[-1500:] + result.stderr[-500:]),
+                % (owner, "\n".join(differences)),
             )
+        else:
+            # The render stopped before the compare, for example on a download
+            # error. That is not drift: the job fails, and the next run tries again.
+            problems += 1
+            print("drift: the render failed before the compare; no issue is opened\n%s%s" % (result.stdout[-1500:], result.stderr[-1500:]))
     else:
         print("drift: BCR does not have %s yet; there is nothing to compare" % ours)
 

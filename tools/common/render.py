@@ -20,9 +20,9 @@ import json
 import pathlib
 import shutil
 import sys
-import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import net  # noqa: E402
 import permalinks  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -100,8 +100,7 @@ def download(url, cache, offline):
     if offline:
         sys.exit("render: %s is not in the cache and --offline is set" % url)
     print("render: downloading %s" % url)
-    with urllib.request.urlopen(url) as response:
-        data = response.read()
+    data = net.read(url)
     cached.parent.mkdir(parents=True, exist_ok=True)
     cached.write_bytes(data)
     return data, False
@@ -204,6 +203,8 @@ def main():
         )
     except permalinks.Offline as e:
         sys.exit("render: %s and --offline is set" % e)
+    except net.Error as e:
+        sys.exit("render: %s" % e)
     print("render: %s@%s -> %s%s" % (name, module_version, version_dir, " (archive from the cache)" if from_cache else ""))
 
     # The line numbers of a permalink follow the text to the new version. Only a
