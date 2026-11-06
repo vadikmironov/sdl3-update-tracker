@@ -1,0 +1,4 @@
+# As a consumer sets it to compile its own code with -Werror and the headers of
+# its dependencies without their warnings.
+common --features=external_include_paths
+common --host_features=external_include_paths

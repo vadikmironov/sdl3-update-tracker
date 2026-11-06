@@ -39,6 +39,7 @@ holds it, with links that operate. It is a copy only.
 | A platform job, the module step | The new version does not build, or a test fails, on that platform and Bazel version | Read the log. Correct `module/overlay/` in the same pull request. When `testsymbols` fails to link, upstream added a source directory: add it to the globs in `module/overlay/BUILD.bazel` |
 | A platform job, the test module step | A consumer cannot link the module: visibility, the archives, or on macOS the Objective-C half and its frameworks | Correct `module/overlay/BUILD.bazel` |
 | A macOS consumer job | The module builds with `apple_support`, but not with `rules_cc` alone or with `toolchains_llvm` | Correct the macOS part of `module/overlay/BUILD.bazel` |
+| The consumer with external_include_paths | The feature moves the search paths of other repositories to `-isystem`. Under it, a header of a dependency is not found, a header that the module and a dependency both supply resolves to the dependency's, or a consumer gets the module's headers without `-isystem` | Read `module/overlay/cc_headers_only.bzl` and `module/overlay/wayland_protocols.bzl` |
 | CMake oracle | The build config that the module generates on Linux is different from what SDL's configure produces: upstream added, removed or changed a check | Download the artifact `build-config-<image>` and compare the two headers. Write the check in `module/overlay/sdl3_config_checks.bzl`. With docker, `tools/module/gen_linux_build_config.sh` makes the oracle locally |
 | Permalinks | The text under a permalink changed upstream, so the renderer cannot move the link | Look at what changed: it can mean work for the overlay. Run `tools/common/check_permalinks.py --version <new> --fix`. It moves the links that only moved, and lists the links that you must correct by hand, with the line numbers of `<new>`. After that run, nothing checks those links |
 | Gate | A job above is red | This is the one required check. `rerun.yml` starts the failed jobs again one time, on a different runner, so a red Gate means that the job failed two times |
@@ -92,7 +93,7 @@ tools/module/diff_config.sh "$(bazel cquery --output=files @sdl3//:config_h)" /t
 | `upstream.json` | The upstream version, the number of a BCR-only revision and the version that it is for (`bcr_revision_for`: a revision for an older version does not apply), and the version that the line numbers of the permalinks are correct for |
 | `module/` | The module. `%{upstream_version}` and `%{module_version}` replace the version |
 | `module/source.json.in` | The URL and the key order of `source.json`. The renderer calculates the hashes |
-| `consumers/` | Root modules that use the rendered registry: the default one with `apple_support`, one with `rules_cc` only, one on `toolchains_llvm` |
+| `consumers/` | Root modules that use the rendered registry: the default one with `apple_support`, one with `rules_cc` only, one on `toolchains_llvm`, one with `external_include_paths` |
 | `tools/common/` | Tools that are the same for each tracker: the renderer, the permalinks, the canary, the staging and the drift |
 | `tools/module/` | Tools that are specific to sdl3: the CMake oracle and its comparison |
 | `rendered/` | The output of the renderer. Git ignores it |
