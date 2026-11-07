@@ -2,7 +2,7 @@
 
 module(
     name = "sdl3",
-    version = "3.4.18.bcr.2",
+    version = "3.4.20",
     bazel_compatibility = [">=7.4.0"],
     compatibility_level = 1,
 )
