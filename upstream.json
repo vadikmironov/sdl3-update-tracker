@@ -1,8 +1,8 @@
 {
     "module": "sdl3",
-    "version": "3.4.18",
+    "version": "3.4.20",
     "bcr_revision": 2,
     "bcr_revision_for": "3.4.18",
-    "permalinks_verified_for": "3.4.18",
+    "permalinks_verified_for": "3.4.20",
     "release_notes": "https://github.com/libsdl-org/SDL/releases/tag/release-%{upstream_version}"
 }

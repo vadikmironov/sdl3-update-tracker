@@ -251,7 +251,7 @@ _COMMON_SRCS = glob([
 _WAYLAND = wayland_protocol_sources(glob(["wayland-protocols/*.xml"]))
 
 # https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/CMakeLists.txt#L1774-L2152
-# https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/cmake/sdlchecks.cmake#L1090-L1101
+# https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/cmake/sdlchecks.cmake#L1113-L1124
 _LINUX_SRCS = glob([
     "src/audio/alsa/*.c",
     "src/camera/v4l2/*.c",
