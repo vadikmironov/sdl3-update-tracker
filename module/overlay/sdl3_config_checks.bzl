@@ -372,7 +372,7 @@ SDL3_CONFIG_CHECKS_COMPILER = [
 
 # CMake adds -D_REENTRANT -pthread to every probe here.
 # https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/cmake/sdlchecks.cmake#L967-L969
-# https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/cmake/sdlchecks.cmake#L1020-L1088
+# https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/cmake/sdlchecks.cmake#L1020-L1111
 _PTHREAD = {
     "copts": ["-pthread"],
     "linkopts": ["-pthread"],
@@ -406,14 +406,41 @@ _PTHREAD_CHECKS = [
         requires = ["HAVE_PTHREADS"],
         **_PTHREAD
     ),
+    # The first of the three wait functions that exists, as CMake checks them.
+    _builds(
+        "HAVE_SEM_CLOCKWAIT",
+        "#include <pthread.h>\n#include <semaphore.h>\n#include <time.h>\nint main(void) { sem_clockwait(NULL, CLOCK_MONOTONIC, NULL); return 0; }\n",
+        requires = ["HAVE_PTHREADS_SEM"],
+        **_PTHREAD
+    ),
+    _builds(
+        "HAVE_SEM_CLOCKWAIT_NP",
+        "#include <pthread.h>\n#include <semaphore.h>\n#include <time.h>\nint main(void) { sem_clockwait_np(NULL, CLOCK_MONOTONIC, 0, NULL, NULL); return 0; }\n",
+        requires = [
+            "HAVE_PTHREADS_SEM",
+            "!HAVE_SEM_CLOCKWAIT",
+        ],
+        **_PTHREAD
+    ),
     _builds(
         "HAVE_SEM_TIMEDWAIT",
         "#include <pthread.h>\n#include <semaphore.h>\nint main(void) { sem_timedwait(NULL, NULL); return 0; }\n",
-        requires = ["HAVE_PTHREADS_SEM"],
+        requires = [
+            "HAVE_PTHREADS_SEM",
+            "!HAVE_SEM_CLOCKWAIT",
+            "!HAVE_SEM_CLOCKWAIT_NP",
+        ],
         **_PTHREAD
     ),
     _header("pthread.h"),
     _header("pthread_np.h"),
+    # check_symbol_exists, as _decl does, but with the pthread flags.
+    _builds(
+        "HAVE_PTHREAD_CONDATTR_SETCLOCK",
+        "#include <pthread.h>\nint main(void) {\n#ifndef pthread_condattr_setclock\n    (void)pthread_condattr_setclock;\n#endif\n    return 0;\n}\n",
+        requires = ["HAVE_PTHREAD_H"],
+        **_PTHREAD
+    ),
     _builds(
         "HAVE_PTHREAD_SETNAME_NP",
         """#include <pthread.h>
@@ -532,7 +559,7 @@ _LINUX_FIXED = [
     checks.AC_DEFINE("SDL_AUDIO_DRIVER_DUMMY", "1"),
     # Joysticks: HIDAPI without a backend (hidraw needs libudev, libusb is
     # off); CMake ties the virtual joystick to SDL_HIDAPI.
-    # https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/cmake/sdlchecks.cmake#L1248-L1307
+    # https://github.com/libsdl-org/SDL/blob/release-%{upstream_version}/cmake/sdlchecks.cmake#L1271-L1330
     checks.AC_DEFINE("SDL_JOYSTICK_HIDAPI", "1"),
     checks.AC_DEFINE("SDL_JOYSTICK_VIRTUAL", "1"),
     checks.AC_DEFINE("SDL_SENSOR_DUMMY", "1"),
