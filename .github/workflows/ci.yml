@@ -90,13 +90,13 @@ jobs:
         with:
           name: rendered
           path: rendered
-      - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
+      - uses: bazel-contrib/setup-bazel@f34d6a05eae3c24acab7fa54587492daeaeffdab # 0.19.2
         with:
           bazelisk-cache: true
       # Bazel 8.8 bundles JDK 25+36. On Windows arm64 its server stopped or hung
       # in 43 of 48 starts, and in 0 of 48 on the latest Zulu 25. Bazel 7 and 9
       # bundle a different JDK.
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         id: jdk
         if: runner.os == 'Windows' && runner.arch == 'ARM64' && startsWith(matrix.bazel, '8.')
         with:
@@ -225,7 +225,7 @@ jobs:
         with:
           name: rendered
           path: rendered
-      - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
+      - uses: bazel-contrib/setup-bazel@f34d6a05eae3c24acab7fa54587492daeaeffdab # 0.19.2
         with:
           bazelisk-cache: true
       - name: Build and test through the rendered registry
